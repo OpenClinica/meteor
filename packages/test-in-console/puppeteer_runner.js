@@ -10,28 +10,37 @@ async function runNextUrl(browser) {
   // });
 
   page.on('console', async msg => {
+    const text = msg.text();
+
+    if (text.includes('Permissions policy violation')) {
+      return
+    }
+
     // this is a way to make sure the travis does not timeout
     // if the test is running for too long without any output to the console (10 minutes)
-    if (msg._text !== undefined) console.log(msg._text);
-    else {
-      testNumber++;
-      const currentClientTest =
-       await page.evaluate(() =>  __Tinytest._getCurrentRunningTestOnClient());
-      if (currentClientTest !== '') {
-        console.log(`Currently running on the client test: ${ currentClientTest }`)
-        return;
-      }
-      // If we get here is because we have not yet started the test on the client
-      const currentServerTest =
-       await page.evaluate(async () => await __Tinytest._getCurrentRunningTestOnServer());
-
-      if (currentServerTest !== '') {
-        console.log(`Currently running on the server test: ${ currentServerTest }`);
-        return;
-      }
-      // we were not able to find the name of the test, this is a way to make sure the test is still running
-      console.log(`Test number: ${ testNumber }`);
+    if (msg._text !== undefined) {
+      console.log(msg._text);
+      return
     }
+
+    testNumber++;
+
+    const currentClientTest = await page.evaluate(() =>  __Tinytest._getCurrentRunningTestOnClient());
+
+    if (currentClientTest !== '') {
+      console.log(`Currently running on the client test: ${ currentClientTest }`)
+      return;
+    }
+    // If we get here is because we have not yet started the test on the client
+    const currentServerTest =
+     await page.evaluate(async () => await __Tinytest._getCurrentRunningTestOnServer());
+
+    if (currentServerTest !== '') {
+      console.log(`Currently running on the server test: ${ currentServerTest }`);
+      return;
+    }
+    // we were not able to find the name of the test, this is a way to make sure the test is still running
+    console.log(`Test number: ${ testNumber }`);
   });
 
   if (!process.env.URL) {
@@ -134,7 +143,7 @@ async function runTests() {
       '--disable-setuid-sandbox',
       '--disable-web-security',
     ],
-    headless: "new",
+    headless: 'new',
   });
   console.log(`Using version: ${await browser.version()}`);
   await runNextUrl(browser)
