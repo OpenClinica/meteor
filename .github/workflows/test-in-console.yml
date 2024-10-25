@@ -1,19 +1,16 @@
-name: Test Deprecated Packages
+name: Test In Console
 
-# Disabled until we figure out how to fix the error from puppeteer
-# Runs on Travis CI for now
-#
-#on:
-#  push:
-#    branches:
-#      - main
-#  pull_request:
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.head_ref }}-test-deprecated-packages
+      group: ${{ github.head_ref }}-test-in-console
       cancel-in-progress: true
     timeout-minutes: 60
 
