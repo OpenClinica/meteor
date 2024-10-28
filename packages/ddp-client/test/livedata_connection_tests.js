@@ -1,3 +1,5 @@
+import has from 'lodash.has';
+import identity from 'lodash.identity'
 import FakeTimers from '@sinonjs/fake-timers';
 import { DDP } from '../common/namespace.js';
 import { Connection } from '../common/livedata_connection.js';
@@ -53,10 +55,10 @@ const testGotMessage = function(test, stream, expected) {
   // function.
   if (typeof expected === 'object') {
     const keysWithStarValues = [];
-    _.each(expected, function(v, k) {
+    Object.entries(expected).forEach(function([k, v]) {
       if (v === '*') keysWithStarValues.push(k);
     });
-    _.each(keysWithStarValues, function(k) {
+    keysWithStarValues.forEach(function(k) {
       expected[k] = got[k];
     });
   }
@@ -260,7 +262,7 @@ Tinytest.addAsync('livedata stub - reactive subscribe', async function(test) {
   const onReadyCount = {};
   const onReady = function(tag) {
     return function() {
-      if (_.has(onReadyCount, tag)) ++onReadyCount[tag];
+      if (has(onReadyCount, tag)) ++onReadyCount[tag];
       else onReadyCount[tag] = 1;
     };
   };
@@ -367,10 +369,15 @@ Tinytest.addAsync('livedata stub - reactive subscribe', async function(test) {
 
   test.length(stream.sent, 4);
   // The order of unsubs here is not important.
-  const unsubMessages = _.map(stream.sent, JSON.parse);
+  const unsubMessages = stream.sent.map(JSON.parse);
   stream.sent.length = 0;
-  test.equal(_.unique(_.pluck(unsubMessages, 'msg')), ['unsub']);
-  const actualIds = _.pluck(unsubMessages, 'id');
+  test.equal(
+    [...new Set(unsubMessages.map(msg => {
+    return msg['msg']
+  }))], ['unsub']);
+  const actualIds = unsubMessages.map(function(msg){
+    return msg['id']
+  });
   const expectedIds = [idFoo2, idBar1, idCompleter, idStopperAgain];
   actualIds.sort();
   expectedIds.sort();
@@ -473,7 +480,7 @@ Tinytest.addAsync('livedata stub - this', async function(test) {
   });
 
   // should throw no exceptions
-  conn.call('test_this', _.identity);
+  conn.call('test_this', identity);
   // satisfy method, quiesce connection
   let message = JSON.parse(stream.sent.shift());
   test.isUndefined(message.randomSeed);
@@ -629,7 +636,7 @@ Tinytest.addAsync('livedata stub - mutating method args', async function(test) {
     }
   });
 
-  conn.call('mutateArgs', { foo: 50 }, _.identity);
+  conn.call('mutateArgs', { foo: 50 }, identity);
 
   // Method should be called with original arg, not mutated arg.
   let message = JSON.parse(stream.sent.shift());
@@ -645,7 +652,7 @@ Tinytest.addAsync('livedata stub - mutating method args', async function(test) {
 
 const observeCursor = async function(test, cursor) {
   const counts = { added: 0, removed: 0, changed: 0, moved: 0 };
-  const expectedCounts = _.clone(counts);
+  const expectedCounts = Object.assign({}, counts);
   const handle = await cursor.observe({
     addedAt: function() {
       counts.added += 1;
@@ -661,9 +668,9 @@ const observeCursor = async function(test, cursor) {
     }
   });
   return {
-    stop: _.bind(handle.stop, handle),
+    stop: handle.stop.bind(handle),
     expectCallbacks: function(delta) {
-      _.each(delta, function(mod, field) {
+      Object.entries(delta || []).forEach(function([field, mod]) {
         expectedCounts[field] += mod;
       });
       test.equal(counts, expectedCounts);
@@ -834,8 +841,8 @@ Tinytest.addAsync('livedata stub - reconnect', async function(test, onComplete) 
     methodCallbackFired = true;
   });
 
-  conn.apply('do_something_else', [], { wait: true }, _.identity);
-  conn.apply('do_something_later', [], _.identity);
+  conn.apply('do_something_else', [], { wait: true }, identity);
+  conn.apply('do_something_later', [], identity);
 
   test.isFalse(methodCallbackFired);
 
@@ -1505,9 +1512,9 @@ if (Meteor.isClient) {
       test.equal(coll.find().count(), 0);
 
       // Call a random method (no-op)
-      conn.call('no-op', _.identity);
+      conn.call('no-op', identity);
       // Call a wait method
-      conn.apply('no-op', [], { wait: true }, _.identity);
+      conn.apply('no-op', [], { wait: true }, identity);
       // Call a method with a stub that writes.
       await conn.applyAsync('insertSomething', []);
 
@@ -1572,7 +1579,7 @@ Tinytest.addAsync('livedata stub - reactive resub', async function(test) {
     // message with an id we haven't seen before
     for (let msg of stream.sent) {
       msg = JSON.parse(msg);
-      if (msg.msg === 'sub' && !_.has(readiedSubs, msg.id)) {
+      if (msg.msg === 'sub' && !has(readiedSubs, msg.id)) {
         await stream.receive({ msg: 'ready', subs: [msg.id] });
         readiedSubs[msg.id] = true;
       }
@@ -1789,15 +1796,15 @@ addReconnectTests(
     conn.methods({ do_something: function(x) {} });
 
     setOnReconnect(conn, function() {
-      conn.apply('do_something', ['reconnect zero'], _.identity);
-      conn.apply('do_something', ['reconnect one'], _.identity);
-      conn.apply('do_something', ['reconnect two'], { wait: true }, _.identity);
-      conn.apply('do_something', ['reconnect three'], _.identity);
+      conn.apply('do_something', ['reconnect zero'], identity);
+      conn.apply('do_something', ['reconnect one'], identity);
+      conn.apply('do_something', ['reconnect two'], { wait: true }, identity);
+      conn.apply('do_something', ['reconnect three'], identity);
     });
 
-    conn.apply('do_something', ['one'], _.identity);
-    conn.apply('do_something', ['two'], { wait: true }, _.identity);
-    conn.apply('do_something', ['three'], _.identity);
+    conn.apply('do_something', ['one'], identity);
+    conn.apply('do_something', ['two'], { wait: true }, identity);
+    conn.apply('do_something', ['three'], identity);
 
     // reconnect
     stream.sent = [];
@@ -1808,7 +1815,7 @@ addReconnectTests(
     // what we expect to be blocked. The subsequent logic to correctly
     // read the wait flag is tested separately.
     test.equal(
-      _.map(stream.sent, function(msg) {
+      stream.sent.map(function(msg) {
         return JSON.parse(msg).params[0];
       }),
       ['reconnect zero', 'reconnect one']
@@ -1816,10 +1823,10 @@ addReconnectTests(
 
     // white-box test:
     test.equal(
-      _.map(conn._outstandingMethodBlocks, function(block) {
+      conn._outstandingMethodBlocks.map(function(block) {
         return [
           block.wait,
-          _.map(block.methods, function(method) {
+          block.methods.map(function(method) {
             return method._message.params[0];
           })
         ];
@@ -1854,7 +1861,7 @@ Tinytest.addAsync('livedata connection - ping with id', async function(test) {
   testGotMessage(test, stream, { msg: 'pong', id: id });
 });
 
-_.each(DDPCommon.SUPPORTED_DDP_VERSIONS, function(version) {
+DDPCommon.SUPPORTED_DDP_VERSIONS.forEach(function(version) {
   Tinytest.addAsync('livedata connection - ping from ' + version, function(
     test,
     onComplete
@@ -2015,15 +2022,15 @@ addReconnectTests(
     conn.methods({ do_something: function(x) {} });
 
     setOnReconnect(conn, function() {
-      conn.apply('do_something', ['reconnect one'], _.identity);
-      conn.apply('do_something', ['reconnect two'], _.identity);
-      conn.apply('do_something', ['reconnect three'], _.identity);
+      conn.apply('do_something', ['reconnect one'], identity);
+      conn.apply('do_something', ['reconnect two'], identity);
+      conn.apply('do_something', ['reconnect three'], identity);
     });
 
-    conn.apply('do_something', ['one'], _.identity);
-    conn.apply('do_something', ['two'], { wait: true }, _.identity);
-    conn.apply('do_something', ['three'], { wait: true }, _.identity);
-    conn.apply('do_something', ['four'], _.identity);
+    conn.apply('do_something', ['one'], identity);
+    conn.apply('do_something', ['two'], { wait: true }, identity);
+    conn.apply('do_something', ['three'], { wait: true }, identity);
+    conn.apply('do_something', ['four'], identity);
 
     // reconnect
     stream.sent = [];
@@ -2034,7 +2041,7 @@ addReconnectTests(
     // what we expect to be blocked. The subsequent logic to correctly
     // read the wait flag is tested separately.
     test.equal(
-      _.map(stream.sent, function(msg) {
+      stream.sent.map(function(msg) {
         return JSON.parse(msg).params[0];
       }),
       ['reconnect one', 'reconnect two', 'reconnect three', 'one']
@@ -2042,10 +2049,10 @@ addReconnectTests(
 
     // white-box test:
     test.equal(
-      _.map(conn._outstandingMethodBlocks, function(block) {
+      conn._outstandingMethodBlocks.map(function(block) {
         return [
           block.wait,
-          _.map(block.methods, function(method) {
+          block.methods.map(function(method) {
             return method._message.params[0];
           })
         ];
@@ -2071,10 +2078,10 @@ addReconnectTests(
     conn.methods({ do_something: function(x) {} });
 
     setOnReconnect(conn, function() {
-      conn.apply('do_something', ['login'], { wait: true }, _.identity);
+      conn.apply('do_something', ['login'], { wait: true }, identity);
     });
 
-    conn.apply('do_something', ['one'], _.identity);
+    conn.apply('do_something', ['one'], identity);
 
     // initial connect
     stream.sent = [];
@@ -2178,7 +2185,7 @@ addReconnectTests('livedata stub - reconnect double wait method', async function
   // Call another method. It should be delivered immediately. This is a
   // regression test for a case where it never got delivered because there was
   // an empty block in _outstandingMethodBlocks blocking it from being sent.
-  conn.call('lastMethod', _.identity);
+  conn.call('lastMethod', identity);
   testGotMessage(test, stream, {
     msg: 'method',
     method: 'lastMethod',
