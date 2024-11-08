@@ -132,6 +132,7 @@ export const VALID_ARCHITECTURES: Record<string, boolean> = {
   "os.osx.arm64": true,
   "os.linux.x86_64": true,
   "os.windows.x86_64": true,
+  "os.linux.aarch64": true,
 };
 
 // Returns the fully qualified arch of this host -- something like
@@ -171,7 +172,7 @@ export function host() {
       }
     } else if (platform === "linux") {
       const machine = run('uname', '-m');
-      if (["x86_64", "amd64", "ia64"].includes(machine)) {
+      if (["x86_64", "amd64", "ia64", "aarch64"].includes(machine)) {
         _host = "os.linux.x86_64";
       } else {
         throw new Error(`Unsupported architecture: ${machine}`);
