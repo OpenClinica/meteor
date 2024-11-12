@@ -36,11 +36,13 @@ downloadNodeFromS3() {
     curl "${NODE_URL}" | tar zx --strip 1
 }
 
-# Nodejs 14 official download source has been discontinued, we are switching to our custom source https://static.meteor.com
+# Nodejs 14 official download source has been discontinued, we are switching to our custom source github.com/wekan
 downloadOfficialNode14() {
-    METEOR_NODE_URL="https://static.meteor.com/dev-bundle-node-os/v${NODE_VERSION}/${NODE_TGZ}"
+    METEOR_NODE_URL="https://github.com/wekan/node-v14-esm/releases/download/v${NODE_VERSION}/${NODE_TGZ}"
     echo "Downloading Node from ${METEOR_NODE_URL}" >&2
-    curl "${METEOR_NODE_URL}" | tar zx --strip-components 1
+    curl -L "${METEOR_NODE_URL}" -o "$DIR/${NODE_TGZ}"
+    tar -xf "$DIR/${NODE_TGZ}" --strip-components 1
+    rm -rf "${NODE_TGZ}"
 }
 
 downloadOfficialNode() {
@@ -56,38 +58,33 @@ downloadReleaseCandidateNode() {
 }
 
 # Try each strategy in the following order:
-extractNodeFromTarGz || downloadNodeFromS3 || \
-  downloadOfficialNode14 || downloadReleaseCandidateNode
+downloadOfficialNode14
 
 # On macOS, download MongoDB from mongodb.com. On Linux, download a custom build
 # that is compatible with current distributions. If a 32-bit Linux is used,
 # download a 32-bit legacy version from mongodb.com instead.
 MONGO_VERSION=$MONGO_VERSION_64BIT
 
-if [ $ARCH = "i686" ] && [ $OS = "linux" ]; then
-    MONGO_VERSION=$MONGO_VERSION_32BIT
-fi
-
-case $OS in
-    macos) MONGO_BASE_URL="https://fastdl.mongodb.org/osx" ;;
-    linux)
-        [ $ARCH = "i686" ] &&
-            MONGO_BASE_URL="https://fastdl.mongodb.org/linux" ||
-            MONGO_BASE_URL="https://github.com/meteor/mongodb-builder/releases/download/v${MONGO_VERSION}"
-        ;;
-esac
-
-
-if [ $OS = "macos" ] && [ "$(uname -m)" = "arm64" ] ; then
-  MONGO_NAME="mongodb-${OS}-x86_64-${MONGO_VERSION}"
+if [ "$ARCH" == "aarch64" ] ; then
+  MONGO_VERSION=$MONGO_VERSION_64BIT
+  # Download official MongoDB Ubuntu aarch64 binaries
+  MONGO_URL="https://fastdl.mongodb.org/linux/mongodb-linux-aarch64-ubuntu1804-${MONGO_VERSION}.tgz"
+  MONGO_NAME="mongodb-linux-aarch64-ubuntu1804-${MONGO_VERSION}"
+  echo "Downloading Mongo from ${MONGO_URL}"
+  curl -L "${MONGO_URL}" | tar zx
+  echo $(pwd)
+  echo $(ls)
 else
-  MONGO_NAME="mongodb-${OS}-${ARCH}-${MONGO_VERSION}"
+  MONGO_VERSION=$MONGO_VERSION_64BIT
+  if [ $ARCH = "i686" ]; then
+    MONGO_VERSION=$MONGO_VERSION_32BIT
+  fi
+  MONGO_NAME="mongodb-${OS}-${ARCH}-ubuntu1804-${MONGO_VERSION}"
+  MONGO_TGZ="${MONGO_NAME}.tgz"
+  MONGO_URL="http://fastdl.mongodb.org/${OS}/${MONGO_TGZ}"
+  echo "Downloading Mongo from ${MONGO_URL}"
+  curl "${MONGO_URL}" | tar zx
 fi
-
-MONGO_TGZ="${MONGO_NAME}.tgz"
-MONGO_URL="${MONGO_BASE_URL}/${MONGO_TGZ}"
-echo "Downloading Mongo from ${MONGO_URL}"
-curl -L "${MONGO_URL}" | tar zx
 
 # Put Mongo binaries in the right spot (mongodb/bin)
 mkdir -p "mongodb/bin"
@@ -97,7 +94,6 @@ rm -rf "${MONGO_NAME}"
 
 # export path so we use the downloaded node and npm
 export PATH="$DIR/bin:$PATH"
-
 cd "$DIR/lib"
 # Overwrite the bundled version with the latest version of npm.
 npm install "npm@$NPM_VERSION"
